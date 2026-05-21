@@ -1,80 +1,82 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from datetime import datetime
+from fastapi import FastAPI, HTTPException, Depends
+from sqlalchemy.orm import Session
+
+from database import engine, SessionLocal, Base
+import models
+from schemas import AlertIn, AlertOut
+
+# This line tells SQLAlchemy to create the "alerts" table in alerts.db
+# (if it doesn't already exist). This is what makes the .db file appear.
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Security Alert Management API")
 
-# ---- The "shape" of an alert coming IN from the user ----
-# Pydantic checks the incoming data matches these types automatically.
-# We DON'T ask the user for id/created_at/updated_at — the server sets those.
-class AlertIn(BaseModel):
-    title: str
-    description: str
-    severity: str   # Low / Medium / High / Critical
-    status: str     # Open / In Progress / Closed
-    source: str     # Email / Endpoint / Firewall / Cloud / SIEM
 
-# ---- Fake in-memory "database": just a Python list for today ----
-# Day 2 replaces this with a real database.
-alerts = []
-next_id = 1   # we increment this to give each alert a unique id
+# ---- Dependency: hand each endpoint a database session, then close it ----
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db          # give the session to the endpoint
+    finally:
+        db.close()        # always close it, even if an error happened
 
 
 # ---- GET /alerts : return ALL alerts ----
-@app.get("/alerts")
-def get_all_alerts():
-    return alerts
+@app.get("/alerts", response_model=list[AlertOut])
+def get_all_alerts(db: Session = Depends(get_db)):
+    return db.query(models.Alert).all()
 
 
-# ---- GET /alerts/{id} : return ONE alert by its id ----
-@app.get("/alerts/{alert_id}")
-def get_one_alert(alert_id: int):
-    for alert in alerts:
-        if alert["id"] == alert_id:
-            return alert
-    raise HTTPException(status_code=404, detail="Alert not found")
+# ---- GET /alerts/{id} : return ONE alert by id ----
+@app.get("/alerts/{alert_id}", response_model=AlertOut)
+def get_one_alert(alert_id: int, db: Session = Depends(get_db)):
+    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return alert
 
 
 # ---- POST /alerts : CREATE a new alert ----
-@app.post("/alerts", status_code=201)   # 201 = "Created"
-def create_alert(alert_in: AlertIn):
-    global next_id
-    now = datetime.now().isoformat()
-    new_alert = {
-        "id": next_id,
-        "title": alert_in.title,
-        "description": alert_in.description,
-        "severity": alert_in.severity,
-        "status": alert_in.status,
-        "source": alert_in.source,
-        "created_at": now,
-        "updated_at": now,
-    }
-    alerts.append(new_alert)
-    next_id += 1
+@app.post("/alerts", response_model=AlertOut, status_code=201)
+def create_alert(alert_in: AlertIn, db: Session = Depends(get_db)):
+    new_alert = models.Alert(
+        title=alert_in.title,
+        description=alert_in.description,
+        severity=alert_in.severity.value,
+        status=alert_in.status.value,
+        source=alert_in.source.value,
+    )
+    db.add(new_alert)        # stage the new row
+    db.commit()              # save it to the database
+    db.refresh(new_alert)    # reload it so we get the id + timestamps
     return new_alert
 
 
 # ---- PUT /alerts/{id} : UPDATE an existing alert ----
-@app.put("/alerts/{alert_id}")
-def update_alert(alert_id: int, alert_in: AlertIn):
-    for alert in alerts:
-        if alert["id"] == alert_id:
-            alert["title"] = alert_in.title
-            alert["description"] = alert_in.description
-            alert["severity"] = alert_in.severity
-            alert["status"] = alert_in.status
-            alert["source"] = alert_in.source
-            alert["updated_at"] = datetime.now().isoformat()
-            return alert
-    raise HTTPException(status_code=404, detail="Alert not found")
+@app.put("/alerts/{alert_id}", response_model=AlertOut)
+def update_alert(alert_id: int, alert_in: AlertIn, db: Session = Depends(get_db)):
+    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    alert.title = alert_in.title
+    alert.description = alert_in.description
+    alert.severity = alert_in.severity.value
+    alert.status = alert_in.status.value
+    alert.source = alert_in.source.value
+
+    db.commit()
+    db.refresh(alert)
+    return alert
 
 
 # ---- DELETE /alerts/{id} : remove an alert ----
 @app.delete("/alerts/{alert_id}")
-def delete_alert(alert_id: int):
-    for index, alert in enumerate(alerts):
-        if alert["id"] == alert_id:
-            alerts.pop(index)
-            return {"message": "Alert deleted"}
-    raise HTTPException(status_code=404, detail="Alert not found")
+def delete_alert(alert_id: int, db: Session = Depends(get_db)):
+    alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    db.delete(alert)
+    db.commit()
+    return {"message": "Alert deleted"}
