@@ -43,16 +43,18 @@ class AlertIn(BaseModel):
         cleaned = value.strip()
         if not cleaned:
             raise ValueError("Title cannot be empty")
+        if len(cleaned) > 200:
+            raise ValueError("Title must be 200 characters or fewer")
         return cleaned
 
-    # This runs automatically for "description".
-    # Reject if it's shorter than 10 characters (after trimming).
     @field_validator("description")
     @classmethod
     def description_min_length(cls, value):
         cleaned = value.strip()
         if len(cleaned) < 10:
             raise ValueError("Description must be at least 10 characters")
+        if len(cleaned) > 2000:
+            raise ValueError("Description must be 2000 characters or fewer")
         return cleaned
 
 
