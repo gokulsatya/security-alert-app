@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
-
+from fastapi.middleware.cors import CORSMiddleware
 from database import engine, SessionLocal, Base
 import models
 from schemas import AlertIn, AlertOut
@@ -10,6 +10,19 @@ from schemas import AlertIn, AlertOut
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Security Alert Management API")
+# ---- Allow the React frontend (on a different address) to call this API ----
+# The browser blocks cross-address requests unless the server opts in via CORS.
+# We explicitly trust the React dev server's address.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],   # allow GET, POST, PUT, DELETE, etc.
+    allow_headers=["*"],   # allow all request headers
+)
 
 
 # ---- Dependency: hand each endpoint a database session, then close it ----
