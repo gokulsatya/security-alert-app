@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ConfigDict
 from datetime import datetime
 from enum import Enum
 
@@ -71,5 +71,4 @@ class AlertOut(BaseModel):
     updated_at: datetime
 
     # This lets Pydantic read data straight from a SQLAlchemy row object.
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

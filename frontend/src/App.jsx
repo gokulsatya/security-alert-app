@@ -328,6 +328,25 @@ function App() {
         {showForm ? "Cancel" : "+ Add New Alert"}
       </button>
 
+      {/* ---- Export CSV button (standalone link styled as a button) ---- */}
+      <a
+        href={`${API_URL}/alerts/export`}
+        style={{
+          display: "inline-block",
+          marginBottom: "1rem",
+          marginLeft: "0.5rem",
+          padding: "0.4rem 0.8rem",
+          background: "#1e1e2e",
+          border: "1px solid #333",
+          borderRadius: "4px",
+          color: "inherit",
+          textDecoration: "none",
+          fontSize: "0.9rem",
+        }}
+      >
+        Export CSV
+      </a>
+
       {/* ---- The Create form (only shown when showForm is true) ---- */}
       {showForm && (
         <div style={{ border: "1px solid #333", borderRadius: "8px", padding: "1rem", marginBottom: "1.5rem", maxWidth: "500px" }}>

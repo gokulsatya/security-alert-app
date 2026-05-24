@@ -27,6 +27,9 @@ The backend and frontend run as **two separate servers**: the API on `http://127
 - **Full CRUD**: create, view details, edit, close (one click sets status to Closed), and delete (with a confirmation prompt).
 - **Validation** on the backend: enforced severity/status/source values, non-empty title, and a 10–200 character title / 10–2000 character description range.
 - **Friendly error handling**: failed requests surface in a dismissible banner instead of crashing the page.
+- **CSV export**: a one-click "Export CSV" button (and `GET /alerts/export` endpoint) downloads all alerts as a spreadsheet-ready file.
+- **Request logging**: every API request is logged (method, path, status code, response time) to both the terminal and an `app.log` file.
+- **Automated tests**: a `pytest` suite covers all five endpoints plus validation, run against an isolated test database so real data is never touched.
 
 ---
 
@@ -53,7 +56,9 @@ security-alert-app/
 ├─ models.py            The Alert table (SQLAlchemy ORM model)
 ├─ schemas.py           Pydantic validation (enums + field rules)
 ├─ seed.py              Inserts 22 sample alerts
-├─ main.py              FastAPI app: the 5 endpoints + CORS
+├─ main.py              FastAPI app: endpoints + CORS + request logging + CSV export
+├─ test_main.py         Pytest suite (8 tests: endpoints + validation)
+├─ requirements.txt     Pinned Python dependencies
 ├─ alerts.db            SQLite database file (git-ignored, auto-created)
 ├─ .gitignore
 └─ frontend/            The React app
@@ -91,8 +96,8 @@ venv\Scripts\Activate.ps1
 # macOS / Linux
 # source venv/bin/activate
 
-# Install dependencies
-pip install fastapi "uvicorn[standard]" sqlalchemy
+# Install dependencies (pinned versions)
+pip install -r requirements.txt
 
 # Seed the database with 22 sample alerts
 python seed.py
@@ -114,6 +119,16 @@ npm run dev
 ```
 
 The dashboard now runs at **http://localhost:5173**. Open it in your browser — both servers must be running for it to load data.
+
+### 3. Running the Tests (optional)
+
+From the project root, with the virtual environment active:
+
+```bash
+pytest -v
+```
+
+This runs 8 tests covering all five endpoints and the validation rules. They execute against a separate, throwaway test database, so your seeded `alerts.db` is never modified.
 
 ---
 
@@ -200,6 +215,7 @@ Enforced by Pydantic on the backend (invalid input returns `422` with a clear me
 - **Explicit CORS allow-list**: the backend trusts only the two known frontend dev-server origins (`localhost:5173` and `127.0.0.1:5173`) rather than the wildcard `*`.
 - **Proper HTTP status codes**: 201 (created), 200 (success), 404 (not found), 422 (validation error).
 - **No sensitive data in errors**: the API returns clean messages (e.g. "Alert not found") with no stack traces or database internals exposed.
+- **Request logging**: all requests are recorded with method, path, and status, giving a basic audit trail of activity against the API.
 
 ---
 
@@ -237,6 +253,4 @@ Enforced by Pydantic on the backend (invalid input returns `422` with a clear me
 
 - Username/password authentication protecting create/update/delete
 - Dockerfile + docker-compose for one-command setup
-- Unit tests for the API endpoints and validation
-- Basic request logging
-- CSV export of alerts
+- Themed modals for the details panel and delete confirmation

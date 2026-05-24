@@ -1,4 +1,9 @@
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.responses import StreamingResponse
+import csv
+import io
+import logging
+import time
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine, SessionLocal, Base
@@ -8,6 +13,19 @@ from schemas import AlertIn, AlertOut
 # This line tells SQLAlchemy to create the "alerts" table in alerts.db
 # (if it doesn't already exist). This is what makes the .db file appear.
 Base.metadata.create_all(bind=engine)
+
+# ---- Logging setup ----
+# Records each request to BOTH the terminal and a file (app.log).
+# logging is Python's standard library — no install needed.
+logging.basicConfig(
+    level=logging.INFO,  # record INFO and above (INFO, WARNING, ERROR)
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[
+        logging.StreamHandler(),          # prints to the terminal
+        logging.FileHandler("app.log"),   # also writes to app.log on disk
+    ],
+)
+logger = logging.getLogger("security-alert-app")
 
 app = FastAPI(title="Security Alert Management API")
 # ---- Allow the React frontend (on a different address) to call this API ----
@@ -25,6 +43,8 @@ app.add_middleware(
 )
 
 
+
+
 # ---- Dependency: hand each endpoint a database session, then close it ----
 def get_db():
     db = SessionLocal()
@@ -39,6 +59,46 @@ def get_db():
 def get_all_alerts(db: Session = Depends(get_db)):
     return db.query(models.Alert).all()
 
+# ---- GET /alerts/export : download ALL alerts as a CSV file ----
+# NOTE: this MUST be defined ABOVE the "/alerts/{alert_id}" route below.
+# FastAPI matches routes top-to-bottom; if {alert_id} came first it would
+# try to read the word "export" as an id and fail.
+@app.get("/alerts/export")
+def export_alerts_csv(db: Session = Depends(get_db)):
+    alerts = db.query(models.Alert).all()
+
+    # Write the CSV into an in-memory text buffer (not a file on disk).
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+
+    # Header row — the column names.
+    writer.writerow(
+        ["id", "title", "description", "severity",
+         "status", "source", "created_at", "updated_at"]
+    )
+
+    # One row per alert.
+    for alert in alerts:
+        writer.writerow([
+            alert.id,
+            alert.title,
+            alert.description,
+            alert.severity,
+            alert.status,
+            alert.source,
+            alert.created_at,
+            alert.updated_at,
+        ])
+
+    buffer.seek(0)  # rewind to the start so the response reads from the top
+
+    # The Content-Disposition header tells the browser: download this,
+    # don't display it, and name the file alerts.csv.
+    return StreamingResponse(
+        buffer,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=alerts.csv"},
+    )
 
 # ---- GET /alerts/{id} : return ONE alert by id ----
 @app.get("/alerts/{alert_id}", response_model=AlertOut)
