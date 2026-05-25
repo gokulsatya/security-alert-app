@@ -60,6 +60,25 @@ function App() {
   // null = no error = banner hidden.
   const [actionError, setActionError] = useState(null);
 
+
+  // ---- Auth state ----
+  // Holds the encoded "Basic ..." login header once the user logs in.
+  // null = not logged in yet. Cleared on a 401 so they can retry.
+  const [authHeader, setAuthHeader] = useState(null);
+
+  // Prompts for username/password ONCE, then remembers it for the session.
+  // Returns the header string, or null if the user cancels the prompt.
+  const getAuthHeader = () => {
+    if (authHeader) return authHeader;          // already logged in this session
+    const username = window.prompt("Username:");
+    const password = window.prompt("Password:");
+    if (!username || !password) return null;    // user cancelled
+    // HTTP Basic sends "username:password" base64-encoded. btoa does that.
+    const header = "Basic " + btoa(`${username}:${password}`);
+    setAuthHeader(header);
+    return header;
+  };
+
   // ---- Reusable function to fetch all alerts from the backend ----
   // We pull this out of useEffect so we can also call it AFTER a delete,
   // create, or edit — to refresh the table with the latest data.
@@ -102,8 +121,13 @@ function App() {
     // 2. Send a DELETE request to the backend.
     //    Unlike a plain fetch (which defaults to GET), we pass a second
     //    argument telling fetch the method is "DELETE".
+    // Get (or prompt for) the login header; stop if the user cancelled.
+    const auth = getAuthHeader();
+    if (!auth) return;
+
     fetch(`${API_URL}/alerts/${id}`, {
       method: "DELETE",
+      headers: { Authorization: auth },
     })
       .then((response) => {
         if (!response.ok) {
@@ -116,6 +140,7 @@ function App() {
       })
       .catch((err) => {
         setActionError(`Delete failed: ${err.message}`);
+        setAuthHeader(null);  // clear creds so a wrong password can be retried
       });
   };
   
@@ -131,10 +156,12 @@ function App() {
     };
 
     // POST request: like DELETE, but now we also SEND data.
+    const auth = getAuthHeader();
+    if (!auth) return;
+
     fetch(`${API_URL}/alerts`, {
-      method: "POST",
-      // Tell the server we're sending JSON.
-      headers: { "Content-Type": "application/json" },
+      method: "POST", // Tell the server we're sending JSON.
+      headers: { "Content-Type": "application/json", Authorization: auth }, 
       // Convert our JS object into a JSON string for the request body.
       body: JSON.stringify(newAlert),
     })
@@ -157,6 +184,7 @@ function App() {
       })
       .catch((err) => {
         setActionError(`Create failed: ${err.message}`);
+        setAuthHeader(null);  // clear creds so a wrong password can be retried
       });
   };
 
@@ -186,9 +214,12 @@ function App() {
 
     // PUT request: like POST, but it UPDATES an existing alert.
     // Note the id in the URL — that's which alert to update.
+    const auth = getAuthHeader();
+    if (!auth) return;
+
     fetch(`${API_URL}/alerts/${editingId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: auth },
       body: JSON.stringify(updatedAlert),
     })
       .then((response) => {
@@ -207,6 +238,7 @@ function App() {
       })
       .catch((err) => {
         setActionError(`Update failed: ${err.message}`);
+        setAuthHeader(null);  // clear creds so a wrong password can be retried
       });
   };
 
@@ -221,9 +253,12 @@ function App() {
       source: alert.source,
     };
 
+    const auth = getAuthHeader();
+    if (!auth) return;
+
     fetch(`${API_URL}/alerts/${alert.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: auth },
       body: JSON.stringify(closedAlert),
     })
       .then((response) => {
@@ -238,6 +273,7 @@ function App() {
       })
       .catch((err) => {
         setActionError(`Close failed: ${err.message}`);
+        setAuthHeader(null);  // clear creds so a wrong password can be retried
       });
   };
 

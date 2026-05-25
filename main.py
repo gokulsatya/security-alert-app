@@ -1,4 +1,6 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
 from fastapi.responses import StreamingResponse
 import csv
 import io
@@ -41,6 +43,31 @@ app.add_middleware(
     allow_methods=["*"],   # allow GET, POST, PUT, DELETE, etc.
     allow_headers=["*"],   # allow all request headers
 )
+
+# ---- Simple HTTP Basic authentication for write actions ----
+# A single hardcoded user. In a real app these would live in environment
+# variables or a user database — hardcoding is fine for this assignment.
+security = HTTPBasic()
+
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "admin123"
+
+
+# This function runs before any PROTECTED endpoint. It checks the
+# username/password the caller sent. If they're wrong, it returns 401.
+def require_login(credentials: HTTPBasicCredentials = Depends(security)):
+    # secrets.compare_digest compares safely (avoids timing attacks) —
+    # a small security-awareness detail worth knowing.
+    correct_user = secrets.compare_digest(credentials.username, ADMIN_USERNAME)
+    correct_pass = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
+
+    if not (correct_user and correct_pass):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Basic"},  # tells the browser to prompt
+        )
+    return credentials.username
 
 
 
@@ -110,7 +137,7 @@ def get_one_alert(alert_id: int, db: Session = Depends(get_db)):
 
 
 # ---- POST /alerts : CREATE a new alert ----
-@app.post("/alerts", response_model=AlertOut, status_code=201)
+@app.post("/alerts", response_model=AlertOut, status_code=201,dependencies=[Depends(require_login)])
 def create_alert(alert_in: AlertIn, db: Session = Depends(get_db)):
     new_alert = models.Alert(
         title=alert_in.title,
@@ -126,7 +153,7 @@ def create_alert(alert_in: AlertIn, db: Session = Depends(get_db)):
 
 
 # ---- PUT /alerts/{id} : UPDATE an existing alert ----
-@app.put("/alerts/{alert_id}", response_model=AlertOut)
+@app.put("/alerts/{alert_id}", response_model=AlertOut,dependencies=[Depends(require_login)])
 def update_alert(alert_id: int, alert_in: AlertIn, db: Session = Depends(get_db)):
     alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
     if alert is None:
@@ -144,7 +171,7 @@ def update_alert(alert_id: int, alert_in: AlertIn, db: Session = Depends(get_db)
 
 
 # ---- DELETE /alerts/{id} : remove an alert ----
-@app.delete("/alerts/{alert_id}")
+@app.delete("/alerts/{alert_id}", dependencies=[Depends(require_login)])
 def delete_alert(alert_id: int, db: Session = Depends(get_db)):
     alert = db.query(models.Alert).filter(models.Alert.id == alert_id).first()
     if alert is None:

@@ -216,6 +216,7 @@ Enforced by Pydantic on the backend (invalid input returns `422` with a clear me
 - **Proper HTTP status codes**: 201 (created), 200 (success), 404 (not found), 422 (validation error).
 - **No sensitive data in errors**: the API returns clean messages (e.g. "Alert not found") with no stack traces or database internals exposed.
 - **Request logging**: all requests are recorded with method, path, and status, giving a basic audit trail of activity against the API.
+- **Authentication on write actions**: create, update, and delete require HTTP Basic login (the browser prompts once per session); read endpoints stay open so the dashboard loads freely. Demo credentials: username `admin`, password `admin123`. Credentials are hardcoded for this assignment; in production they would live in environment variables with a proper user store.
 
 ---
 
@@ -228,6 +229,9 @@ Enforced by Pydantic on the backend (invalid input returns `422` with a clear me
 
 **Create / edit alert form**
 ![Create form](screenshots/create-form.png)
+
+**HTTP Basic authentication — write actions prompt for login**
+![Authentication prompt](screenshots/auth-prompt.png)
 
 **Alert details panel**
 ![View details](screenshots/view-details.png)
@@ -251,6 +255,5 @@ Enforced by Pydantic on the backend (invalid input returns `422` with a clear me
 
 ## Future Enhancements
 
-- Username/password authentication protecting create/update/delete
 - Dockerfile + docker-compose for one-command setup
 - Themed modals for the details panel and delete confirmation
